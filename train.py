@@ -302,3 +302,4 @@ if __name__ == '__main__':
     os.makedirs(args.result, exist_ok=True)
 
     run(args)
+    print("finish")
