@@ -217,7 +217,7 @@ def run(args):
         torch.manual_seed(args.seed)
         torch.backends.cudnn.deterministic = True
 
-    model = DeepLabv3_plus(nInputChannels=3, n_classes=args.num_classes, os=16, pretrained=False, _print=False)
+    model = DeepLabv3_plus(nInputChannels=3, n_classes=args.num_classes, os=16, pretrained=True, _print=False)
     if args.resume is not None:  # resume
         model.load_state_dict(torch.load(args.resume))
 
@@ -278,7 +278,7 @@ if __name__ == '__main__':
     # Training Arguments
     parser.add_argument('--epochs', default=200, type=int, help='number of total epochs to run')  # [변경]훈련 반복 수
     parser.add_argument('--batch_size', default=1, type=int, help='mini-batch size')  # [변경]배치 사이즈
-    parser.add_argument('--lr', default=0.0001, type=float, help='initial learning rate',
+    parser.add_argument('--lr', default=0.00001, type=float, help='initial learning rate',
                         dest='lr')  # [변경] 초기 Learning rate
     parser.add_argument('--seed', default=42, type=int, help='seed for initializing training.')
     # Validation and Debugging Arguments
