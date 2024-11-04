@@ -210,50 +210,51 @@ def train(args, epoch, model, criterion, optimizer, train_loader, logger=None):
 
     return train_loss / num_loader, train_iou / num_loader, train_dice / num_loader
 
-
 def run(args):
+    # Random Seed
     if args.seed is not None:
         random.seed(args.seed)
         torch.manual_seed(args.seed)
         torch.backends.cudnn.deterministic = True
 
-    model = DeepLabv3_plus(nInputChannels=3, n_classes=args.num_classes, os=16, pretrained=True, _print=False)
+    # [변경] Model 설정
+    model = DeepLabv3_plus(nInputChannels=3, n_classes=args.num_classes, os=16, pretrained=False, _print=False)
     if args.resume is not None:  # resume
         model.load_state_dict(torch.load(args.resume))
 
+    # [변경] Criterion (Loss Function, 손실 함수)  설정
     criterion = DiceBCELoss()
 
+    # [변경] Optimizer 옵티마이저  설정
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
+    # [변경] 스케줄러 설정
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
 
     # CUDA
-    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-    model.to(device)
+    if torch.cuda.is_available():
+        if torch.cuda.device_count() > 1:
+            model = torch.nn.DataParallel(model).cuda()
+        else:
+            model = model.cuda()
 
-    train_loader, valid_loader = make_loader()
+    # Dataset
+    train_loader, val_loader = make_loader()
 
-    logger = Logger(os.path.join(args.result, 'log.txt'), epochs=args.epochs, dataset_size=len(train_loader.dataset),
-                    float_round=5)
+    # Logger
+    logger = Logger(os.path.join(args.result, 'log.txt'), epochs=args.epochs, dataset_size=len(train_loader.dataset), float_round=5)
     logger.set_sort(['loss', 'accuracy', 'lr', 'time'])
     logger(str(args))
 
     # Run
     save_dir = os.path.join(args.result, 'checkpoints')
     for epoch in range(args.epochs):
-        acc_loss = []
         # Train
-        train_loss, train_iou, train_dice = train(args, epoch, model, criterion, optimizer, train_loader, logger=logger)
-        acc_loss.append(train_loss)
-        acc_loss.append(train_iou)
-        acc_loss.append(train_dice)
+        train(args, epoch, model, criterion, optimizer, train_loader, logger=logger)
 
         # Validation
         if epoch % args.val_freq == 0 or epoch == args.epochs - 1:
-            val_loss, val_iou, val_dice = val(epoch, model, criterion, valid_loader, logger=logger)
-            acc_loss.append(val_loss)
-            acc_loss.append(val_iou)
-            acc_loss.append(val_dice)
+            val(epoch, model, criterion, val_loader, logger=logger)
             os.makedirs(save_dir, exist_ok=True)
 
             model_state_dict = model.module.state_dict() if torch.cuda.device_count() > 1 else model.state_dict()
@@ -278,7 +279,7 @@ if __name__ == '__main__':
     # Training Arguments
     parser.add_argument('--epochs', default=200, type=int, help='number of total epochs to run')  # [변경]훈련 반복 수
     parser.add_argument('--batch_size', default=1, type=int, help='mini-batch size')  # [변경]배치 사이즈
-    parser.add_argument('--lr', default=0.00001, type=float, help='initial learning rate',
+    parser.add_argument('--lr', default=0.0001, type=float, help='initial learning rate',
                         dest='lr')  # [변경] 초기 Learning rate
     parser.add_argument('--seed', default=42, type=int, help='seed for initializing training.')
     # Validation and Debugging Arguments
