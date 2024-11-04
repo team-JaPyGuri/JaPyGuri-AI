@@ -36,7 +36,7 @@ class SourceDataset(data.Dataset):
         return len(self.y_path)
 
 
-def make_loader(csv_path='/Users/Han/Desktop/capstone/dataset/source_labeled/file_path.csv', batch_size=1):
+def make_loader(csv_path='/Users/Han/Desktop/capstone/JaPyGuri-AI/dataset/source_labeled/file_path.csv', batch_size=1):
     dataset = SourceDataset(csv_path)
     total_size = len(dataset)
     
@@ -53,7 +53,7 @@ def make_loader(csv_path='/Users/Han/Desktop/capstone/dataset/source_labeled/fil
 
 if __name__ == "__main__":
     print("make_dataset.py")
-    csv_path = '/Users/Han/Desktop/capstone/dataset/source_labeled/file_path.csv'
+    csv_path = '/Users/Han/Desktop/capstone/JaPyGuri-AI/dataset/source_labeled/file_path.csv'
     train_loader, val_loader = make_loader(csv_path, batch_size=1)
 
     # 각 로더의 배치 수 확인

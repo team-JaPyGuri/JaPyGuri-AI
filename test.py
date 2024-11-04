@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torch
+import os
 
 global_avg_pool = nn.Sequential(nn.AdaptiveAvgPool2d((1, 1)),
                                              nn.Conv2d(2048, 256, 1, stride=1, bias=False),
@@ -17,3 +18,10 @@ image = bat(image)
 image = relu(image)
 
 print(image.shape)
+os.system("ls")
+os.chdir("/Users/Han/Desktop/capstone/JaPyGuri-AI")
+os.system("ls")
+os.chdir("/Users/Han/Desktop/capstone/JaPyGuri-AI/dataset")
+os.system("ls")
+os.chdir("/Users/Han/Desktop/capstone/JaPyGuri-AI/dataset/source_labeled")
+os.system("ls")

@@ -275,8 +275,6 @@ if __name__ == '__main__':
     parser.add_argument('--data', default='./Data/Qupath2/patch', help='path to dataset')  # [변경] 이미지 패치 저장 경로
     parser.add_argument('--mask_dir', default='./Data/Qupath2/mask', help='path to mask dir')  # [변경] 패치 마스크 저장 경로
     parser.add_argument('--workers', default=4, type=int, help='number of data loading workers')
-    parser.add_argument('--input_size', default=240, type=int, help='image input size')  # [변경] 입력 이미지의 크기
-    parser.add_argument('--modality', default='dwi', type=str)
     # Training Arguments
     parser.add_argument('--epochs', default=200, type=int, help='number of total epochs to run')  # [변경]훈련 반복 수
     parser.add_argument('--batch_size', default=1, type=int, help='mini-batch size')  # [변경]배치 사이즈
