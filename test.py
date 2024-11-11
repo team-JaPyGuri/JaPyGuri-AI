@@ -1,5 +1,7 @@
-import tensorflow as tf
-print(tf.__version__)
+import torch.nn.functional as F
+import torch
 
-import keras
-print(keras.__version__)
+image = torch.rand((3,128,15))
+print(image.shape)
+image = F.interpolate(image.unsqueeze(0), size=(256, 256), mode='bilinear', align_corners=False).squeeze(0)
+print(image.shape)

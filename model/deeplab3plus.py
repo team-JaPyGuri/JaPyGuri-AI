@@ -4,24 +4,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import math
-import torch.utils.model_zoo as model_zoo
-
 class Bottleneck(nn.Module):
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, rate=1, downsample=None):
         super(Bottleneck, self).__init__()
         self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
-        self.gn1 = nn.GroupNorm(16, planes)
+        self.bn1 = nn.BatchNorm2d(planes)
         self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride,
                                dilation=rate, padding=rate, bias=False)
-        self.gn2 = nn.GroupNorm(16, planes)
+        self.bn2 = nn.BatchNorm2d(planes)
         self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
-        self.gn3 = nn.GroupNorm(16, planes * 4)
+        self.bn3 = nn.BatchNorm2d(planes * 4)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
         self.stride = stride
@@ -31,15 +25,15 @@ class Bottleneck(nn.Module):
         residual = x
 
         out = self.conv1(x)
-        out = self.gn1(out)
+        out = self.bn1(out)
         out = self.relu(out)
 
         out = self.conv2(out)
-        out = self.gn2(out)
+        out = self.bn2(out)
         out = self.relu(out)
 
         out = self.conv3(out)
-        out = self.gn3(out)
+        out = self.bn3(out)
 
         if self.downsample is not None:
             residual = self.downsample(x)
@@ -66,7 +60,7 @@ class ResNet(nn.Module):
             raise NotImplementedError
 
         self.conv1 = nn.Conv2d(nInputChannels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.gn1 = nn.GroupNorm(16, 64)
+        self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
@@ -85,7 +79,7 @@ class ResNet(nn.Module):
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, planes * block.expansion, kernel_size=1, stride=stride, bias=False),
-                nn.GroupNorm(16, planes * block.expansion),
+                nn.BatchNorm2d(planes * block.expansion),
             )
 
         layers = []
@@ -101,7 +95,7 @@ class ResNet(nn.Module):
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
                 nn.Conv2d(self.inplanes, planes * block.expansion, kernel_size=1, stride=stride, bias=False),
-                nn.GroupNorm(16, planes * block.expansion),
+                nn.BatchNorm2d(planes * block.expansion),
             )
 
         layers = []
@@ -114,7 +108,7 @@ class ResNet(nn.Module):
 
     def forward(self, input):
         x = self.conv1(input)
-        x = self.gn1(x)
+        x = self.bn1(x)
         x = self.relu(x)
         x = self.maxpool(x)
 
@@ -129,7 +123,7 @@ class ResNet(nn.Module):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 torch.nn.init.kaiming_normal_(m.weight)
-            elif isinstance(m, nn.GroupNorm):
+            elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
@@ -158,14 +152,14 @@ class ASPP_module(nn.Module):
             padding = rate
         self.atrous_convolution = nn.Conv2d(inplanes, planes, kernel_size=kernel_size,
                                             stride=1, padding=padding, dilation=rate, bias=False)
-        self.gn = nn.GroupNorm(16, planes)
+        self.bn = nn.BatchNorm2d(planes)
         self.relu = nn.ReLU()
 
         self._init_weight()
 
     def forward(self, x):
         x = self.atrous_convolution(x)
-        x = self.gn(x)
+        x = self.bn(x)
 
         return self.relu(x)
 
@@ -173,7 +167,7 @@ class ASPP_module(nn.Module):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 torch.nn.init.kaiming_normal_(m.weight)
-            elif isinstance(m, nn.GroupNorm):
+            elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
@@ -204,22 +198,24 @@ class DeepLabv3_plus(nn.Module):
 
         self.global_avg_pool = nn.Sequential(nn.AdaptiveAvgPool2d((1, 1)),
                                              nn.Conv2d(2048, 256, 1, stride=1, bias=False),
-                                             nn.GroupNorm(16, 256),
+                                             nn.BatchNorm2d(256),
                                              nn.ReLU())
 
         self.conv1 = nn.Conv2d(1280, 256, 1, bias=False)
-        self.gn1 = nn.GroupNorm(16, 256)
+        self.bn1 = nn.BatchNorm2d(256)
 
         self.conv2 = nn.Conv2d(256, 48, 1, bias=False)
-        self.gn2 = nn.GroupNorm(16, 48)
+        self.bn2 = nn.BatchNorm2d(48)
 
         self.last_conv = nn.Sequential(nn.Conv2d(304, 256, kernel_size=3, stride=1, padding=1, bias=False),
-                                       nn.GroupNorm(16, 256),
+                                       nn.BatchNorm2d(256),
                                        nn.ReLU(),
                                        nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
-                                       nn.GroupNorm(16, 256),
+                                       nn.BatchNorm2d(256),
                                        nn.ReLU(),
                                        nn.Conv2d(256, n_classes, kernel_size=1, stride=1))
+
+        self._init_weight()
         self.prob = nn.Sigmoid()
 
     def forward(self, input):
@@ -234,67 +230,43 @@ class DeepLabv3_plus(nn.Module):
         x5 = F.interpolate(x5, size=x4.size()[2:], mode='bilinear', align_corners=True)
 
         x = torch.cat((x1, x2, x3, x4, x5), dim=1)
-        x = self.conv1(x)
-        x = self.gn1(x)
 
-        x = F.interpolate(x, size=(low_level_features.size(2), low_level_features.size(3)), mode='bilinear', align_corners=True)
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = F.interpolate(x, size=(low_level_features.size()[2], low_level_features.size()[3]), mode='bilinear',
+                          align_corners=True)
 
         low_level_features = self.conv2(low_level_features)
-        low_level_features = self.gn2(low_level_features)
+        low_level_features = self.bn2(low_level_features)
+        low_level_features = self.relu(low_level_features)
 
         x = torch.cat((x, low_level_features), dim=1)
         x = self.last_conv(x)
 
-        x = F.interpolate(x, size=(input.size(2), input.size(3)), mode='bilinear', align_corners=True)
+        x = F.interpolate(x, size=(input.size()[2], input.size()[3]), mode='bilinear', align_corners=True)
 
         return self.prob(x)
 
-
-    def freeze_gn(self):
-        for m in self.modules():
-            if isinstance(m, nn.GroupNorm):
-                m.eval()
-
-    def __init_weight(self):
+    def _init_weight(self):
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
-                # n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                # m.weight.data.normal_(0, math.sqrt(2. / n))
                 torch.nn.init.kaiming_normal_(m.weight)
-            elif isinstance(m, nn.GroupNorm):
+            elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-def get_1x_lr_params(model):
-    """
-    This generator returns all the parameters of the net except for
-    the last classification layer. Note that for each batchnorm layer,
-    requires_grad is set to False in deeplab_resnet.py, therefore this function does not return
-    any batchnorm parameter
-    """
-    b = [model.resnet_features]
-    for i in range(len(b)):
-        for k in b[i].parameters():
-            if k.requires_grad:
-                yield k
+def DeepLabv3_plus_resnet101(nInputChannels=3, n_classes=21, os=16, pretrained=False):
+    model = DeepLabv3_plus(nInputChannels=nInputChannels, n_classes=n_classes, os=os, pretrained=pretrained)
+    return model
 
 
-def get_10x_lr_params(model):
-    """
-    This generator returns all the parameters for the last layer of the net,
-    which does the classification of pixel into classes
-    """
-    b = [model.aspp1, model.aspp2, model.aspp3, model.aspp4, model.conv1, model.conv2, model.last_conv]
-    for j in range(len(b)):
-        for k in b[j].parameters():
-            if k.requires_grad:
-                yield k
 
 
 if __name__ == "__main__":
-    model = DeepLabv3_plus(nInputChannels=3, n_classes=1, os=16, pretrained=True, _print=True)
+    model = DeepLabv3_plus_resnet101(nInputChannels=3, n_classes=1, os=16, pretrained=False)
     model.eval()
-    image = torch.randn(1, 3, 194, 265)
+    image = torch.randn(1, 3, 256, 256)
     with torch.no_grad():
         output = model.forward(image)
     print(output.size())

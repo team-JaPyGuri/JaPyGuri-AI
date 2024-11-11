@@ -1,0 +1,1 @@
+Namespace(num_classes=1, resume=None, data='./Data/Qupath2/patch', mask_dir='./Data/Qupath2/mask', workers=4, epochs=100, batch_size=8, lr=0.0001, seed=42, val_freq=1, print_freq=1000, print_confusion_mat=False, result='results_segmentor/20241111151716', tag=None)

@@ -239,7 +239,7 @@ def run(args):
             model = model.cuda()
 
     # Dataset
-    train_loader, val_loader = make_loader()
+    train_loader, val_loader = make_loader(batch_size=args.batch_size)
 
     # Logger
     logger = Logger(os.path.join(args.result, 'log.txt'), epochs=args.epochs, dataset_size=len(train_loader.dataset), float_round=5)
@@ -266,7 +266,6 @@ def run(args):
 
 
 if __name__ == '__main__':
-
     # Arguments 설정
     parser = argparse.ArgumentParser(description='PyTorch Training')
     # Model Arguments
@@ -278,7 +277,7 @@ if __name__ == '__main__':
     parser.add_argument('--workers', default=4, type=int, help='number of data loading workers')
     # Training Arguments
     parser.add_argument('--epochs', default=100, type=int, help='number of total epochs to run')  # [변경]훈련 반복 수
-    parser.add_argument('--batch_size', default=1, type=int, help='mini-batch size')  # [변경]배치 사이즈
+    parser.add_argument('--batch_size', default=8, type=int, help='mini-batch size')  # [변경]배치 사이즈
     parser.add_argument('--lr', default=0.0001, type=float, help='initial learning rate',
                         dest='lr')  # [변경] 초기 Learning rate
     parser.add_argument('--seed', default=42, type=int, help='seed for initializing training.')
