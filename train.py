@@ -75,14 +75,9 @@ def val(epoch, model, criterion, val_loader, logger=None):
             output = model(inputs)
             loss = criterion(output, targets)
 
-            # Accuracy 계산
-            threshold = 0.3
-            pred = output
-            pred[pred > threshold] = 1
-            pred[pred <= threshold] = 0
 
-            iou_score = iou(targets, pred).item()
-            dice_score = dice(targets, pred).item()
+            iou_score = iou(targets, output).item()
+            dice_score = dice(targets, output).item()
 
             val_loss += loss.item()
             val_iou += iou_score
@@ -165,13 +160,9 @@ def train(args, epoch, model, criterion, optimizer, train_loader, logger=None):
         # 가중치 업데이트
         optimizer.step()
 
-        threshold = 0.3
-        pred = output
-        pred[pred > threshold] = 1
-        pred[pred <= threshold] = 0
 
-        iou_score = iou(targets, pred).item()
-        dice_score = dice(targets, pred).item()
+        iou_score = iou(targets, output).item()
+        dice_score = dice(targets, output).item()
         # print(iou_score, dice_score)
 
         train_loss += loss.item()
@@ -218,7 +209,7 @@ def run(args):
         torch.backends.cudnn.deterministic = True
 
     # [변경] Model 설정
-    model = DeepLabv3_plus(nInputChannels=3, n_classes=args.num_classes, os=16, pretrained=False, _print=False)
+    model = DeepLabv3_plus(nInputChannels=3, n_classes=args.num_classes, os=16, pretrained=True, _print=False)
     if args.resume is not None:  # resume
         model.load_state_dict(torch.load(args.resume))
 
