@@ -84,7 +84,7 @@ def make_loader(csv_path='/Users/Han/Desktop/capstone/JaPyGuri-AI/dataset/source
     total_size = len(dataset)
 
     # Define split sizes
-    train_size = int(0.8 * total_size)
+    train_size = int(0.8 * total_size) + 1
     val_size = total_size - train_size
 
     # Randomly split dataset into training and validation sets
