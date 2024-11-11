@@ -12,6 +12,7 @@ from model.deeplab3plus import DeepLabv3_plus
 from loss.diceBCEloss import DiceBCELoss
 from dataset.make_dataset import make_loader
 from logger import Logger
+from model.unet import unet
 
 def iou(y_true, y_pred):
     num = y_true.size(0)
