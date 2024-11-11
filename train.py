@@ -276,7 +276,7 @@ if __name__ == '__main__':
     parser.add_argument('--mask_dir', default='./Data/Qupath2/mask', help='path to mask dir')  # [변경] 패치 마스크 저장 경로
     parser.add_argument('--workers', default=4, type=int, help='number of data loading workers')
     # Training Arguments
-    parser.add_argument('--epochs', default=100, type=int, help='number of total epochs to run')  # [변경]훈련 반복 수
+    parser.add_argument('--epochs', default=50, type=int, help='number of total epochs to run')  # [변경]훈련 반복 수
     parser.add_argument('--batch_size', default=8, type=int, help='mini-batch size')  # [변경]배치 사이즈
     parser.add_argument('--lr', default=0.0001, type=float, help='initial learning rate',
                         dest='lr')  # [변경] 초기 Learning rate
