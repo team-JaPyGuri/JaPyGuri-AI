@@ -24,7 +24,7 @@ for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):
     img = resize(img, (IMG_HEIGHT, IMG_WIDTH), mode='constant', preserve_range=True) 
     X_train[n] = img 
 
-    
+
 TRAIN_PATH ='/Users/Han/Desktop/capstone/JaPyGuri-AI/dataset/source_labeled/labels'
 IMG_WIDTH = 256
 IMG_HEIGHT = 256
@@ -40,8 +40,74 @@ for n, id_ in tqdm(enumerate(train_ids), total=len(train_ids)):
 from model.unet import unet
 from loss.diceBCEloss import DiceBCELoss
 import torch
+import torch.nn as nn
+import torch.nn.functional as F
 
-model = unet(3,1)
+class UNet(nn.Module):
+    def __init__(self, IMG_CHANNELS):
+        super(UNet, self).__init__()
+        
+        # Contraction path (Downsampling)
+        self.enc1 = self.contract_block(IMG_CHANNELS, 64)
+        self.enc2 = self.contract_block(64, 128)
+        self.basic_block = nn.Sequential(
+            nn.Conv2d(128, 256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.1),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+        )
+        
+        # Expansive path (Upsampling)
+        self.upconv3 = self.expand_block(256, 128)
+        self.upconv2 = self.expand_block(128, 64)
+        
+        # Final convolution to get output
+        self.final_conv = nn.Conv2d(64, 1, kernel_size=1)
+        
+    def contract_block(self, in_channels, out_channels):
+        block = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.1),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
+        return block
+    
+    def expand_block(self, in_channels, out_channels):
+        block = nn.Sequential(
+            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2),
+            nn.ReLU(inplace=True),
+            nn.Dropout(0.2),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True)
+        )
+        return block
+    
+    def forward(self, x):
+        # Contracting path
+        enc1 = self.enc1(x)
+        enc2 = self.enc2(enc1)
+
+        feature = self.basic_block(enc2)
+        
+        # Expanding path
+        upconv3 = self.upconv3(feature)
+        upconv2 = self.upconv2(upconv3)
+        
+        # Final output layer
+        out = self.final_conv(upconv2)
+        return torch.sigmoid(out)  # For binary segmentation, use sigmoid
+
+
+# Create the model
+model = UNet(3)
+
+
 criterion = DiceBCELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 def dice(y_true, y_pred):

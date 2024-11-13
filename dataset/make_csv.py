@@ -5,7 +5,7 @@ import os
 def make_file_path(root):
     image_dir = root + "/images"
     label_dir = root + "/labels"
-
+    
     image_paths = []
     label_paths = []
 

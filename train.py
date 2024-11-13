@@ -170,13 +170,6 @@ def train(args, epoch, model, criterion, optimizer, train_loader, logger=None):
         train_iou += iou_score
         train_dice += dice_score
 
-        """
-        pred_flat = pred.flatten()
-        true_flat = targets.flatten()
-        # Confusion matrix 저장
-        for t, p in zip(true_flat, pred_flat):
-            confusion_mat[int(t.item())][int(p.item())] += 1
-        """
 
         # 로그 히스토리 저장
         num_progress += len(inputs)
@@ -221,7 +214,7 @@ def run(args):
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     # [변경] 스케줄러 설정
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.5)
 
     # CUDA
     if torch.cuda.is_available():
@@ -269,7 +262,7 @@ if __name__ == '__main__':
     parser.add_argument('--workers', default=4, type=int, help='number of data loading workers')
     # Training Arguments
     parser.add_argument('--epochs', default=50, type=int, help='number of total epochs to run')  # [변경]훈련 반복 수
-    parser.add_argument('--batch_size', default=8, type=int, help='mini-batch size')  # [변경]배치 사이즈
+    parser.add_argument('--batch_size', default=1, type=int, help='mini-batch size')  # [변경]배치 사이즈
     parser.add_argument('--lr', default=0.0001, type=float, help='initial learning rate',
                         dest='lr')  # [변경] 초기 Learning rate
     parser.add_argument('--seed', default=42, type=int, help='seed for initializing training.')
