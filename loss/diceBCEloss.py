@@ -1,6 +1,9 @@
 from torch import nn
 # define dice loss
 class DiceBCELoss(nn.Module):
+    """
+    we expected inputs is probability value not logit
+    """
 
     def __init__(self, eps=1e-7):
         super(DiceBCELoss, self).__init__()

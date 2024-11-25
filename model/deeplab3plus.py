@@ -265,36 +265,138 @@ class DeepLabv3_plus(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-def get_1x_lr_params(model):
-    """
-    This generator returns all the parameters of the net except for
-    the last classification layer. Note that for each batchnorm layer,
-    requires_grad is set to False in deeplab_resnet.py, therefore this function does not return
-    any batchnorm parameter
-    """
-    b = [model.resnet_features]
-    for i in range(len(b)):
-        for k in b[i].parameters():
-            if k.requires_grad:
-                yield k
+
+class DeepLabv3_plus_extractor(nn.Module):
+    def __init__(self, nInputChannels=3, os=16, pretrained=False):
+        
+        super(DeepLabv3_plus_extractor, self).__init__()
+
+        self.resnet_features = ResNet101(nInputChannels, os, pretrained=pretrained)
+
+        if os == 16:
+            rates = [1, 6, 12, 18]
+        elif os == 8:
+            rates = [1, 12, 24, 36]
+        else:
+            raise NotImplementedError
+
+        self.aspp1 = ASPP_module(2048, 256, rate=rates[0])
+        self.aspp2 = ASPP_module(2048, 256, rate=rates[1])
+        self.aspp3 = ASPP_module(2048, 256, rate=rates[2])
+        self.aspp4 = ASPP_module(2048, 256, rate=rates[3])
+
+        self.relu = nn.ReLU()
+
+        self.global_avg_pool = nn.Sequential(nn.AdaptiveAvgPool2d((1, 1)),
+                                             nn.Conv2d(2048, 256, 1, stride=1, bias=False),
+                                             nn.GroupNorm(16, 256),
+                                             nn.ReLU())
+
+        self.conv1 = nn.Conv2d(1280, 256, 1, bias=False)
+        self.gn1 = nn.GroupNorm(16, 256)
+
+        self.conv2 = nn.Conv2d(256, 48, 1, bias=False)
+        self.gn2 = nn.GroupNorm(16, 48)
+
+        
+
+    def forward(self, input):
+        x, low_level_features = self.resnet_features(input)
+
+        x1 = self.aspp1(x)
+        x2 = self.aspp2(x)
+        x3 = self.aspp3(x)
+        x4 = self.aspp4(x)
+
+        x5 = self.global_avg_pool(x)
+        x5 = F.interpolate(x5, size=x4.size()[2:], mode='bilinear', align_corners=True)
+
+        x = torch.cat((x1, x2, x3, x4, x5), dim=1)
+        x = self.conv1(x)
+        x = self.gn1(x)
+
+        x = F.interpolate(x, size=(low_level_features.size(2), low_level_features.size(3)), mode='bilinear', align_corners=True)
+
+        low_level_features = self.conv2(low_level_features)
+        low_level_features = self.gn2(low_level_features)
+
+        x = torch.cat((x, low_level_features), dim=1)
+
+        return x
 
 
-def get_10x_lr_params(model):
-    """
-    This generator returns all the parameters for the last layer of the net,
-    which does the classification of pixel into classes
-    """
-    b = [model.aspp1, model.aspp2, model.aspp3, model.aspp4, model.conv1, model.conv2, model.last_conv]
-    for j in range(len(b)):
-        for k in b[j].parameters():
-            if k.requires_grad:
-                yield k
+    
+
+class constructer(nn.Module):
+    def __init__(self, n_classes=21):
+        super(constructer, self).__init__()
+        self.last_conv = nn.Sequential(nn.Conv2d(304, 256, kernel_size=3, stride=1, padding=1, bias=False),
+                                       nn.GroupNorm(16, 256),
+                                       nn.ReLU(),
+                                       nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=False),
+                                       nn.GroupNorm(16, 256),
+                                       nn.ReLU(),
+                                       nn.Conv2d(256, n_classes, kernel_size=1, stride=1))
+        self.prob = nn.Sigmoid()
+
+    def forward(self, input, origin):
+        
+        x = self.last_conv(input)
+
+        x = F.interpolate(x, size=(origin.size(2), origin.size(3)), mode='bilinear', align_corners=True)
+
+        return self.prob(x)
+
+
+class discriminator(nn.Module):
+    def __init__(self, input_channels):
+        super(discriminator, self).__init__()
+        self.conv1 = nn.Conv2d(input_channels, 64, kernel_size=3, stride=2, padding=1)
+        self.conv2 = nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1)
+        self.conv3 = nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1)
+        self.conv4 = nn.Conv2d(256, 512, kernel_size=3, stride=2, padding=1)
+        
+        self.bn1 = nn.BatchNorm2d(64)
+        self.bn2 = nn.BatchNorm2d(128)
+        self.bn3 = nn.BatchNorm2d(256)
+        self.bn4 = nn.BatchNorm2d(512)
+        
+        self.global_pool = nn.AdaptiveAvgPool2d((1, 1))  # Global Average Pooling
+        self.fc = nn.Linear(512, 1)  # Output: Single scalar value (e.g., domain label)
+
+    def forward(self, x):
+        # Convolutional layers
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = F.relu(self.bn4(self.conv4(x)))
+        
+        # Global Average Pooling
+        x = self.global_pool(x)  # Output size: (B, 512, 1, 1)
+        x = torch.flatten(x, 1)  # Flatten to (B, 512)
+        
+        # Fully Connected Layer
+        x = self.fc(x)  # Output size: (B, 1)
+        return x
+
+
+
 
 
 if __name__ == "__main__":
-    model = DeepLabv3_plus(nInputChannels=3, n_classes=1, os=16, pretrained=True, _print=True)
+    model = DeepLabv3_plus_extractor(nInputChannels=3, os=16, pretrained=False, _print=True)
+    c = constructer(n_classes=1)
+    d = discriminator(304)
     model.eval()
-    image = torch.randn(1, 3, 194, 265)
-    with torch.no_grad():
-        output = model.forward(image)
+    c.eval()
+    d.eval()
+    input = torch.randn(1, 3, 194, 265)
+
+    latent_space = model(input)
+    print(latent_space.shape)
+
+    domain = d(latent_space)
+    print(domain)
+
+    output = c(latent_space, input)
     print(output.size())

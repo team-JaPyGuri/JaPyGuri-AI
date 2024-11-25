@@ -8,7 +8,7 @@ import torch
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 
-from model.deeplab3plus import DeepLabv3_plus
+from model.deeplab3plus import *
 from loss.diceBCEloss import DiceBCELoss
 from dataset.make_dataset import make_loader
 from logger import Logger
@@ -43,139 +43,105 @@ def dice(y_true, y_pred):
     return score
 
 
-def val(epoch, model, criterion, val_loader, logger=None):
-    """
-    epoch: 현재 epoch
-    model: 학습할 모델 객체
-    criterion: 손실 함수
-    val_loader: 평가 데이터를 담은 데이터 로더
-    logger: 로그를 저장할 객체
-    """
+@torch.no_grad()
+def val(args, epoch, feature_extractor, constructer, criterion, val_loader, logger=None):
+    feature_extractor.eval()
+    constructer.eval()
 
-    model.eval()  # 모델을 평가 모드로
-
+    # Metrics
     val_loss = 0.0
     val_iou = 0.0
     val_dice = 0.0
 
     num_loader = len(val_loader)
+    device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
-    # Confusion matrix 초기화
-    confusion_mat = [[0 for _ in range(args.num_classes)] for _ in range(args.num_classes)]
+    for i, (inputs, masks) in enumerate(val_loader):
+        inputs, masks = inputs.to(device), masks.to(device)
 
-    # 평가 데이터를 가져오기 위한 반복문
-    with torch.no_grad():  # Disable gradient calculation
-        for i, (inputs, targets) in tqdm(enumerate(val_loader), leave=False, desc='Validation {}'.format(epoch),
-                                         total=len(val_loader)):
-            # CUDA 사용 가능 시 GPU 사용
-            device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
-            inputs = inputs.to(device)
-            targets = targets.to(device)
+        # Forward Pass
+        latent = feature_extractor(inputs)  # Feature extraction
+        output = constructer(latent, inputs)  # Segmentation prediction
 
-            # 모델 출력
-            output = model(inputs)
-            loss = criterion(output, targets)
+        # Calculate segmentation loss
+        loss = criterion(output, masks)
 
+        # Calculate metrics
+        iou_score = iou(masks, output).item()
+        dice_score = dice(masks, output).item()
 
-            iou_score = iou(targets, output).item()
-            dice_score = dice(targets, output).item()
+        # Accumulate losses and metrics
+        val_loss += loss.item()
+        val_iou += iou_score
+        val_dice += dice_score
 
-            val_loss += loss.item()
-            val_iou += iou_score
-            val_dice += dice_score
-
-            """
-            pred_flat = pred.flatten()
-            true_flat = targets.flatten()
-            # Confusion matrix 저장
-            for t, p in zip(true_flat, pred_flat):
-                confusion_mat[int(t.item())][int(p.item())] += 1
-            """
-
-            # 로그 히스토리 저장
-            logger.add_history('total', {'loss': loss.item(), 'IoU score': iou_score,
+        # 로그 히스토리 저장
+        logger.add_history('total', {'loss': loss.item(), 'IoU score': iou_score,
                                          'Dice score': dice_score})
 
-    # 히스토리 출력
+    # 평균 값 계산
+    avg_loss = val_loss / num_loader
+    avg_iou = val_iou / num_loader
+    avg_dice = val_dice / num_loader
+
+        # 히스토리 출력
     if logger is not None:
         logger('*Validation {}'.format(epoch), history_key='total', time=time.strftime('%Y.%m.%d.%H:%M:%S'))
-    # Confusion matrix 출력
-    if args.print_confusion_mat:
-        pd.set_option('display.max_rows', 500)
-        pd.set_option('display.max_columns', 500)
-        pd.set_option('display.width', 1000)
-        print(pd.DataFrame(confusion_mat))
 
-    return val_loss / num_loader, val_iou / num_loader, val_dice / num_loader
+    return avg_loss, avg_iou, avg_dice
 
 
-def train(args, epoch, model, criterion, optimizer, train_loader, logger=None):
-    """
-    args: 학습 설정을 담고 있는 객체
-    epoch: 현재 epoch
-    model: 학습할 모델 객체
-    criterion: 손실 함수
-    optimizer: 최적화 알고리즘
-    train_loader: 학습 데이터를 담은 데이터 로더
-    logger: 로그를 저장할 객체
-    """
 
-    model.train()  # 모델을 학습 모드로
+def train(args, epoch, feature_extractor, constructer, criterion, 
+          optimizer_f, optimizer_c, train_loader_source, logger=None):
 
-    # For print progress
-    num_progress, next_print = 0, args.print_freq
+    feature_extractor.train()
+    constructer.train()
 
-    # Confusion matrix 초기화
-    confusion_mat = [[0 for _ in range(args.num_classes)] for _ in range(args.num_classes)]
-
+    # Metrics
     train_loss = 0.0
     train_iou = 0.0
     train_dice = 0.0
 
-    num_loader = len(train_loader)
+    num_progress, next_print = 0, args.print_freq
+
+    num_loader = len(train_loader_source)
     device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 
-    # 학습 데이터를 가져오기 위한 반복문
-    for i, (inputs, targets) in enumerate(train_loader):
-        # CUDA 사용 가능 시 GPU 사용
-        inputs = inputs.to(device)
-        targets = targets.to(device)
+    source_iter = iter(train_loader_source)
 
-        # 경사 초기화
-        optimizer.zero_grad()
-        # 모델 출력 값 계산
-        output = model(inputs)
+    for i in range(num_loader):
+        # Load Source and Target Data
+        inputs, masks = next(source_iter)
+        inputs, masks = inputs.to(device), masks.to(device)
 
-        # print(output.shape)
-        # print("output : ",torch.max(output), torch.min(output))
-        # print(output)
+        # Zero Gradients
+        optimizer_f.zero_grad()
+        optimizer_c.zero_grad()
 
-        # print(targets.shape)
-        # print("targets : ",torch.max(targets), torch.min(targets))
-        # print(targets)
+        ### Step 1: Train Segmentation Model (Source Domain Only)
+        latent = feature_extractor(inputs)  # Feature extraction
+        output = constructer(latent, inputs)  # Segmentation prediction
 
-        # 손실 계산
-        loss = criterion(output, targets)
-        # 경사 계산
-        loss.backward()
-        # 가중치 업데이트
-        optimizer.step()
+        # Calculate segmentation loss
+        segmentation_loss = criterion(output, masks)
+        segmentation_loss.backward()
+        optimizer_f.step()
+        optimizer_c.step()
 
+        iou_score = iou(masks, output).item()
+        dice_score = dice(masks, output).item()
 
-        iou_score = iou(targets, output).item()
-        dice_score = dice(targets, output).item()
-        # print(iou_score, dice_score)
-
-        train_loss += loss.item()
+        # Accumulate losses and metrics
+        train_loss += segmentation_loss.item()
         train_iou += iou_score
         train_dice += dice_score
 
-
         # 로그 히스토리 저장
         num_progress += len(inputs)
-        logger.add_history('total', {'loss': loss.item(), 'IoU score': iou_score,
+        logger.add_history('total', {'loss': segmentation_loss.item(), 'IoU score': iou_score,
                                      'Dice score': dice_score})
-        logger.add_history('batch', {'loss': loss.item(), 'IoU score': iou_score,
+        logger.add_history('batch', {'loss': segmentation_loss.item(), 'IoU score': iou_score,
                                      'Dice score': dice_score})
 
         # 일정 주기마다 로그 히스토리 출력
@@ -184,16 +150,17 @@ def train(args, epoch, model, criterion, optimizer, train_loader, logger=None):
                 logger(history_key='batch', epoch=epoch, batch=num_progress, time=time.strftime('%Y.%m.%d.%H:%M:%S'))
             next_print += args.print_freq
 
-    # 전체 로그 히스토리 및 Confusion matrix 출력
+    # 전체 로그 히스토리
     if logger is not None:
-        logger(history_key='total', epoch=epoch, lr=round(optimizer.param_groups[0]['lr'], 12))
-    if args.print_confusion_mat:
-        pd.set_option('display.max_rows', 500)
-        pd.set_option('display.max_columns', 500)
-        pd.set_option('display.width', 1000)
-        print(pd.DataFrame(confusion_mat))
+        logger(history_key='total', epoch=epoch, 
+           lr_f=round(optimizer_f.param_groups[0]['lr'], 12), 
+           lr_c=round(optimizer_c.param_groups[0]['lr'], 12)
+        )
 
-    return train_loss / num_loader, train_iou / num_loader, train_dice / num_loader
+    
+    return (train_loss / num_loader, train_iou / num_loader, train_dice / num_loader)
+
+
 
 def run(args):
     # Random Seed
@@ -202,26 +169,37 @@ def run(args):
         torch.manual_seed(args.seed)
         torch.backends.cudnn.deterministic = True
 
-    # [변경] Model 설정
-    model = DeepLabv3_plus(nInputChannels=3, n_classes=args.num_classes, os=16, pretrained=True, _print=False)
-    if args.resume is not None:  # resume
-        model.load_state_dict(torch.load(args.resume))
-
-    # [변경] Criterion (Loss Function, 손실 함수)  설정
-    criterion = DiceBCELoss()
-
-    # [변경] Optimizer 옵티마이저  설정
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-
-    # [변경] 스케줄러 설정
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=40, gamma=0.5)
+    # 모델 정의
+    model_f = DeepLabv3_plus_extractor(nInputChannels=3, os=16, pretrained=True)
+    model_c = constructer(n_classes=args.num_classes)
 
     # CUDA
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # 모델을 GPU로 보내기
     if torch.cuda.is_available():
+        # 여러 GPU가 있다면 DataParallel을 사용
         if torch.cuda.device_count() > 1:
-            model = torch.nn.DataParallel(model).cuda()
+            model_f = torch.nn.DataParallel(model_f).to(device)
+            model_c = torch.nn.DataParallel(model_c).to(device)
         else:
-            model = model.cuda()
+            model_f = model_f.to(device)
+            model_c = model_c.to(device)
+    else:
+        # CUDA가 없으면 CPU로 모델을 로드
+        model_f = model_f.to(device)
+        model_c = model_c.to(device)
+
+    # 로스 설정
+    criterion = DiceBCELoss()
+    # [변경] Optimizer 옵티마이저  설정
+    optimizer_f = torch.optim.Adam(model_f.parameters(), lr=args.lr)
+    optimizer_c = torch.optim.Adam(model_c.parameters(), lr=args.lr)
+
+    # [변경] 스케줄러 설정
+    scheduler_f = torch.optim.lr_scheduler.StepLR(optimizer_f, step_size=40, gamma=0.5)
+    scheduler_c = torch.optim.lr_scheduler.StepLR(optimizer_c, step_size=40, gamma=0.5)
+
 
     # Dataset
     train_loader, val_loader = make_loader(batch_size=args.batch_size)
@@ -235,18 +213,22 @@ def run(args):
     save_dir = os.path.join(args.result, 'checkpoints')
     for epoch in range(args.epochs):
         # Train
-        train(args, epoch, model, criterion, optimizer, train_loader, logger=logger)
+        train(args, epoch, model_f, model_c, criterion, optimizer_f, optimizer_c, train_loader, logger)
 
         # Validation
         if epoch % args.val_freq == 0 or epoch == args.epochs - 1:
-            val(epoch, model, criterion, val_loader, logger=logger)
+            val(args, epoch, model_f, model_c, criterion, val_loader, logger)
+
             os.makedirs(save_dir, exist_ok=True)
 
-            model_state_dict = model.module.state_dict() if torch.cuda.device_count() > 1 else model.state_dict()
-            torch.save(model_state_dict, os.path.join(save_dir, '{}.pth'.format(epoch)))
+            model_state_dict_f = model_f.module.state_dict() if torch.cuda.device_count() > 1 else model_f.state_dict()
+            torch.save(model_state_dict_f, os.path.join(save_dir, 'f_{}.pth'.format(epoch)))
+            model_state_dict_c = model_c.module.state_dict() if torch.cuda.device_count() > 1 else model_c.state_dict()
+            torch.save(model_state_dict_c, os.path.join(save_dir, 'c_{}.pth'.format(epoch)))
 
         # Scheduler Step
-        scheduler.step()
+        scheduler_f.step()
+        scheduler_c.step()
 
 
 
