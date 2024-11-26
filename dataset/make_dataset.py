@@ -13,7 +13,7 @@ from dataset.make_noise import *
 
 
 class SourceDataset(data.Dataset):
-    def __init__(self, csv_path='/home/ubuntu/JaPyGuri-AI/dataset/source_labeled/file_path.csv'):
+    def __init__(self, csv_path='/Users/Han/Desktop/capstone/JaPyGuri-AI/dataset/source_labeled/file_path.csv'):
         super().__init__()
         path = pd.read_csv(csv_path)
 
