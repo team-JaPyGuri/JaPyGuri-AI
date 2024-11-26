@@ -1,1 +1,0 @@
-Namespace(resume=None, data='./Data/Qupath2/patch', mask_dir='./Data/Qupath2/mask', workers=4, epochs=200, batch_size=8, lr=0.001, seed=42, val_freq=1, print_freq=1000, print_confusion_mat=False, result='noise_ssl/20241125200755', tag=None)
