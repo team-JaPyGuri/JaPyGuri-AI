@@ -107,9 +107,8 @@ def run(args):
 
     model_encoder = encoder(in_channel=3)
     model_decoder = decoder(out_channel=3)
-    if args.resume is not None:  # resume
-        model_encoder.load_state_dict(torch.load(args.resume)) # load encoder
-        model_decoder.load_state_dict(torch.load(args.resume)) # load decoder
+    load_path = '/Users/Han/Desktop/capstone/JaPyGuri-AI/pre_trained_parameter/noise_ssl/noise_ssl_199.pth'
+    model_encoder.load_state_dict(torch.load(load_path, map_location=device)) # load encoder
 
     criterion = MSELoss()
     optimizer = torch.optim.Adam(list(model_encoder.parameters()) + list(model_decoder.parameters()), lr=args.lr)
@@ -130,6 +129,7 @@ def run(args):
     # Run
     save_dir = os.path.join(args.result, 'checkpoints')
     for epoch in range(args.epochs):
+        epoch += 200
         # Train
         train(args, epoch, model_encoder, model_decoder, criterion, optimizer, train_loader, logger)
 
@@ -141,7 +141,7 @@ def run(args):
             model_state_dict = model_encoder.module.state_dict() if torch.cuda.device_count() > 1 else model_encoder.state_dict()
             if epoch % 2 == 1:
                 torch.save(model_state_dict, os.path.join(save_dir, '{}.pth'.format(epoch)))
-
+        epoch -= 200
         # Scheduler Step
         scheduler.step()
 
@@ -158,7 +158,7 @@ if __name__ == '__main__':
     parser.add_argument('--mask_dir', default='./Data/Qupath2/mask', help='path to mask dir')  # 마스크 디렉토리 경로
     parser.add_argument('--workers', default=4, type=int, help='number of data loading workers')
     # Training Arguments
-    parser.add_argument('--epochs', default=200, type=int, help='number of total epochs to run') 
+    parser.add_argument('--epochs', default=300, type=int, help='number of total epochs to run') 
     parser.add_argument('--batch_size', default=8, type=int, help='mini-batch size')  
     parser.add_argument('--lr', default=0.001, type=float, help='initial learning rate',
                         dest='lr')  
