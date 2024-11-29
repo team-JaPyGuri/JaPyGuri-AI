@@ -5,7 +5,6 @@ import time
 
 import pandas as pd
 import torch
-import wandb
 from tqdm import tqdm
 from torch.utils.data import DataLoader
 
@@ -16,14 +15,11 @@ from torch.nn import MSELoss
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 
 def val(args, epoch, feature_extractor, constructor, criterion, val_loader, logger=None):
-
     feature_extractor.eval()  
     constructor.eval() 
 
     num_progress, next_print = 0, args.print_freq
-
     train_loss = 0.0
-
     num_loader = len(val_loader)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -49,18 +45,14 @@ def val(args, epoch, feature_extractor, constructor, criterion, val_loader, logg
     if logger is not None:
         logger('*Validation {}'.format(epoch), history_key='total', time=time.strftime('%Y.%m.%d.%H:%M:%S'))
 
-
     return train_loss / num_loader
 
 def train(args, epoch, feature_extractor, constructor, criterion, optimizer, train_loader, logger=None):
-
     feature_extractor.train()  
     constructor.train() 
 
     num_progress, next_print = 0, args.print_freq
-
     train_loss = 0.0
-
     num_loader = len(train_loader)
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -91,12 +83,11 @@ def train(args, epoch, feature_extractor, constructor, criterion, optimizer, tra
     if logger is not None:
         logger(history_key='total', epoch=epoch, lr=round(optimizer.param_groups[0]['lr'], 12))
 
-
     return train_loss / num_loader
 
 def run(args):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    
+
     if args.use_wandb:
         wandb.init(project=args.wandb_project, config=args, name=args.run_name)
 
@@ -117,8 +108,9 @@ def run(args):
     feature_ext.to(device)
     construct.to(device)
 
-    # Dataset : make_target_loader(batch_size=8, noise_factor=0.25, patch_ratio=0.05, patch_cnt=20)
+    # Dataset
     train_loader, val_loader = make_target_loader(batch_size=args.batch_size, noise_factor=0.25)
+
     # Logger
     logger = Logger(os.path.join(args.result, 'log.txt'), epochs=args.epochs, dataset_size=len(train_loader.dataset), float_round=5)
     logger.set_sort(['loss', 'lr', 'time'])
@@ -143,7 +135,7 @@ def run(args):
         scheduler.step()
         if args.use_wandb and epoch % args.val_freq == 0:
             wandb.log({'training_loss': train_loss, 'lr': optimizer.param_groups[0]['lr'],
-                   'validation_loss': val_loss,})
+                       'validation_loss': val_loss,})
 
 
 if __name__ == '__main__':

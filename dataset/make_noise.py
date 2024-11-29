@@ -1,11 +1,10 @@
 import torch
 import matplotlib.pyplot as plt
-import random
 import numpy as np
 import torchvision.transforms.functional as F
 
-def add_salt_pepper_noise(image, noise_factor=0.4):
-    
+def add_salt_pepper_noise(img, noise_factor=0.4):
+    image = torch.clone(img)
     # 이미지를 numpy 배열로 변환
     image = image.numpy()
 
@@ -25,9 +24,8 @@ def add_salt_pepper_noise(image, noise_factor=0.4):
     # 노이즈가 추가된 이미지를 다시 Tensor로 변환하고 [0, 1] 범위로 반환
     return torch.tensor(image).float()
 
-
-def add_black_patches(image, patch_ratio=0.2, patch_count=5):
-    
+def add_black_patches(img, patch_ratio=0.2, patch_count=5):
+    image = torch.clone(img)
     # 이미지를 numpy 배열로 변환
     image = image.numpy()
 
@@ -49,29 +47,24 @@ def add_black_patches(image, patch_ratio=0.2, patch_count=5):
     # 노이즈가 추가된 이미지를 다시 Tensor로 변환하고 [0, 1] 범위로 반환
     return torch.tensor(image).float()
 
-
 def make_noise(img, noise_factor=0.4, patch_ratio=0.05, patch_cnt=20):
-    noisy_img = torch.clone(img)
-    noisy_img = add_salt_pepper_noise(noisy_img,noise_factor=noise_factor)
-    if patch_cnt > 0 or patch_ratio > 0.0:
-        noisy_img = add_black_patches(noisy_img, patch_ratio=patch_ratio, patch_count=patch_cnt)
+    noisy_img = add_salt_pepper_noise(img, noise_factor=noise_factor)
+    noisy_img = add_black_patches(noisy_img, patch_ratio=patch_ratio, patch_count=patch_cnt)
     return noisy_img
 
-
 def visualize_images(original_image, noisy_image, figsize=(10, 5)):
-
     # 시각화
     plt.figure(figsize=figsize)
     
     # 원본 이미지
     plt.subplot(1, 2, 1)
-    plt.imshow(torch.permute(original_image,(1,2,0)))
+    plt.imshow(torch.permute(original_image, (1, 2, 0)))
     plt.title("Original Image")
     plt.axis("off")
     
     # 노이즈 이미지
     plt.subplot(1, 2, 2)
-    plt.imshow(torch.permute(noisy_image,(1,2,0)))
+    plt.imshow(torch.permute(noisy_image, (1, 2, 0)))
     plt.title("Noisy Image")
     plt.axis("off")
     
