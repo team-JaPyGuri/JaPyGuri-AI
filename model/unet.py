@@ -65,7 +65,6 @@ class expansive_block(nn.Module):
 
         return self.basic(new_ten)
 
-
 class unet(nn.Module):
     def __init__(self, in_channel, num_classes):
         super().__init__()
@@ -116,10 +115,71 @@ class unet(nn.Module):
         x = self.sig(x)
 
         return x
+    
+class feature_extractor(nn.Module):
+    def __init__(self, in_channel):
+        super().__init__()
+
+        # Contracting path (downsampling)
+        self.cont1 = contract_block(in_channel, 64)
+        self.cont2 = contract_block(64, 128)
+        self.cont3 = contract_block(128, 256)
+        self.cont4 = contract_block(256, 512)
+
+        self.basic = basic_block(512, 1024)
+
+    def forward(self, x):
+        # Feature extraction through contracting path
+        feature1, x = self.cont1(x)
+        feature2, x = self.cont2(x)
+        feature3, x = self.cont3(x)
+        feature4, x = self.cont4(x)
+
+        x = self.basic(x)
+
+        # Return features as a tuple
+        features = (feature1, feature2, feature3, feature4)
+        return x, features
+
+
+class reconstructor(nn.Module):
+    def __init__(self, out_channel):
+        super().__init__()
+
+        # Expansive path (upsampling)
+        self.exp4 = expansive_block(1024, 512)
+        self.exp3 = expansive_block(512, 256)
+        self.exp2 = expansive_block(256, 128)
+        self.exp1 = expansive_block(128, 64)
+
+        # Segmentation output layer
+        self.seg = nn.Conv2d(64, out_channel, 1)  # (Class, H, W)
+
+        self.sig = nn.Sigmoid()  # Apply sigmoid to get probability map
+
+    def forward(self, x, features):
+        # Unpack features from the tuple
+        feature1, feature2, feature3, feature4 = features
+
+        # Expansive path (upsampling)
+        x = self.exp4(x, feature4)
+        x = self.exp3(x, feature3)
+        x = self.exp2(x, feature2)
+        x = self.exp1(x, feature1)
+
+        # Final segmentation output
+        x = self.seg(x)
+        x = self.sig(x)
+
+        return x
+
+
+
+
 
 
 if __name__ == '__main__':
-    model = unet(1, 1)
+    model = unet(1, 4)
     a = torch.randn(1, 1, 240, 240)
     output = model(a)
     print(output)

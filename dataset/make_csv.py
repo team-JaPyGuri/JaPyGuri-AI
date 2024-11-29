@@ -27,5 +27,5 @@ def make_csv(root):
 
 if __name__ == "__main__":
     print("make_csv.py")
-    root = '/Users/Han/Desktop/capstone/JaPyGuri-AI/dataset/source_labeled'
+    root = '/mnt/hgh/JaPyGuri-AI/dataset/source_labeled'
     make_csv(root)
