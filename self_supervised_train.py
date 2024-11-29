@@ -88,8 +88,6 @@ def train(args, epoch, feature_extractor, constructor, criterion, optimizer, tra
 def run(args):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    if args.use_wandb:
-        wandb.init(project=args.wandb_project, config=args, name=args.run_name)
 
     # Random Seed
     if args.seed is not None:
@@ -133,10 +131,6 @@ def run(args):
 
         # Scheduler Step
         scheduler.step()
-        if args.use_wandb and epoch % args.val_freq == 0:
-            wandb.log({'training_loss': train_loss, 'lr': optimizer.param_groups[0]['lr'],
-                       'validation_loss': val_loss,})
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='PyTorch Training')
